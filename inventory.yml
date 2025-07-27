@@ -1,0 +1,47 @@
+---
+# LAB Ansible Inventory (Generated)
+# This inventory file contains all running lab containers
+# Use this with Ansible to manage lab containers via SSH
+
+all:
+  children:
+    lab_environment:
+      children:
+        lab_nodes:
+          hosts:
+            lab-01:
+              ansible_host: localhost
+              ansible_port: 2222
+              ansible_user: labuser
+              ansible_ssh_pass: labpass123
+              ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+              container_name: lab-01
+              hostname: lab-01
+              ssh_port: 2222
+              
+            lab-02:
+              ansible_host: localhost
+              ansible_port: 2223
+              ansible_user: labuser
+              ansible_ssh_pass: labpass123
+              ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+              container_name: lab-02
+              hostname: lab-02
+              ssh_port: 2223
+              
+          vars:
+            # Common variables for all lab nodes
+            ansible_python_interpreter: /usr/bin/python3
+            lab_root_password: labroot123
+            lab_user_password: labpass123
+            lab_sudo_enabled: true
+            lab_environment: lab
+            
+    # Group variables for specific roles
+    ubuntu_nodes:
+      children:
+        lab_nodes:
+      vars:
+        ansible_os_family: Debian
+        ansible_distribution: Ubuntu
+        ansible_distribution_version: "22.04"
