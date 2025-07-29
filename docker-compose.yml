@@ -2,7 +2,6 @@
 services:
   lab-01:
     build: .
-    image: lab/image:latest
     container_name: lab-01
     hostname: lab-01
     ports:
@@ -21,7 +20,6 @@ services:
 
   lab-02:
     build: .
-    image: lab/image:latest
     container_name: lab-02
     hostname: lab-02
     ports:
