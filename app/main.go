@@ -387,12 +387,32 @@ func testConnectivity() {
 			if sshPort != "N/A" {
 				fmt.Printf("  %s Testing %s (port %s)... ", blue("→"), bold(hostname), sshPort)
 				
-				// Test SSH connection with timeout
-				cmd := exec.Command("timeout", "10", "sshpass", "-p", "labpass123", "ssh", 
-					"-o", "StrictHostKeyChecking=no", 
-					"-o", "UserKnownHostsFile=/dev/null",
-					"-o", "ConnectTimeout=5",
-					"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
+				// Test SSH connection with cross-platform timeout
+				var cmd *exec.Cmd
+				
+				// Try different timeout commands based on platform
+				if _, err := exec.LookPath("timeout"); err == nil {
+					// Linux timeout command
+					cmd = exec.Command("timeout", "10", "sshpass", "-p", "labpass123", "ssh", 
+						"-o", "StrictHostKeyChecking=no", 
+						"-o", "UserKnownHostsFile=/dev/null",
+						"-o", "ConnectTimeout=5",
+						"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
+				} else if _, err := exec.LookPath("gtimeout"); err == nil {
+					// macOS gtimeout command (from coreutils)
+					cmd = exec.Command("gtimeout", "10", "sshpass", "-p", "labpass123", "ssh", 
+						"-o", "StrictHostKeyChecking=no", 
+						"-o", "UserKnownHostsFile=/dev/null",
+						"-o", "ConnectTimeout=5",
+						"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
+				} else {
+					// Fallback without external timeout (relies on SSH ConnectTimeout)
+					cmd = exec.Command("sshpass", "-p", "labpass123", "ssh", 
+						"-o", "StrictHostKeyChecking=no", 
+						"-o", "UserKnownHostsFile=/dev/null",
+						"-o", "ConnectTimeout=5",
+						"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
+				}
 				
 				output, err := cmd.Output()
 				if err != nil || !strings.Contains(string(output), "SSH_OK") {
