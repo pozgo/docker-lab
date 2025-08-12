@@ -24,14 +24,14 @@ var (
 
 func main() {
 	printHeader()
-	
+
 	if len(os.Args) < 2 {
 		printUsage()
 		return
 	}
-	
+
 	command := os.Args[1]
-	
+
 	// Parse flags for commands that support them
 	var containerCount int
 	if command == "start" {
@@ -40,7 +40,7 @@ func main() {
 		flagSet.IntVar(&containerCount, "c", 2, "Number of containers to create (short flag)")
 		flagSet.Parse(os.Args[2:])
 	}
-	
+
 	switch command {
 	case "start":
 		startLab(containerCount)
@@ -85,36 +85,36 @@ func printUsage() {
 func startLab(containerCount int) {
 	fmt.Printf("\n%s %s\n", green("🚀"), bold("Starting LAB environment..."))
 	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
-	
+
 	if containerCount <= 0 {
 		containerCount = 2
 	}
-	
+
 	fmt.Printf("%s Creating %d containers...\n", cyan("📊"), containerCount)
-	
+
 	// Generate dynamic docker-compose.yml
 	err := generateDockerCompose(containerCount)
 	if err != nil {
 		fmt.Printf("%s Failed to generate docker-compose.yml: %v\n", red("❌"), err)
 		return
 	}
-	
+
 	// Start the lab
 	fmt.Printf("%s Building and starting containers...\n", cyan("📦"))
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	output, err := cmd.CombinedOutput()
-	
+
 	if err != nil {
 		fmt.Printf("%s Failed to start lab: %v\n", red("❌"), err)
 		fmt.Printf("Output: %s\n", string(output))
 		return
 	}
-	
+
 	fmt.Printf("%s Lab started successfully!\n", green("✅"))
-	
+
 	// Wait a moment for containers to initialize
 	time.Sleep(2 * time.Second)
-	
+
 	// Show connection details
 	showConnectionDetails()
 }
@@ -122,50 +122,50 @@ func startLab(containerCount int) {
 func stopLab() {
 	fmt.Printf("\n%s %s\n", yellow("🛑"), bold("Stopping LAB environment..."))
 	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
-	
+
 	cmd := exec.Command("docker", "compose", "down")
 	output, err := cmd.CombinedOutput()
-	
+
 	if err != nil {
 		fmt.Printf("%s Failed to stop lab: %v\n", red("❌"), err)
 		fmt.Printf("Output: %s\n", string(output))
 		return
 	}
-	
+
 	fmt.Printf("%s Lab stopped successfully!\n", green("✅"))
 }
 
 func cleanLab() {
 	fmt.Printf("\n%s %s\n", red("🧹"), bold("Cleaning LAB environment..."))
 	fmt.Printf("%s\n", blue("══════════════════════════════════"))
-	
+
 	// Stop containers first
 	fmt.Printf("%s Stopping containers...\n", yellow("🛑"))
 	stopCmd := exec.Command("docker", "compose", "down")
 	stopCmd.Run()
-	
+
 	// Remove lab images
 	fmt.Printf("%s Removing lab images...\n", red("🗑️"))
 	imagesCmd := exec.Command("docker", "images", "-q", "lab/image")
 	imageOutput, err := imagesCmd.Output()
-	
+
 	if err == nil && len(strings.TrimSpace(string(imageOutput))) > 0 {
 		removeCmd := exec.Command("docker", "rmi", "lab/image:latest")
 		removeCmd.Run()
 	}
-	
+
 	// Clean up unused Docker resources
 	fmt.Printf("%s Cleaning unused Docker resources...\n", cyan("🧽"))
 	pruneCmd := exec.Command("docker", "system", "prune", "-f")
 	pruneCmd.Run()
-	
+
 	fmt.Printf("%s Lab environment cleaned successfully!\n", green("✅"))
 }
 
 func showStatus() {
 	fmt.Printf("\n%s %s\n", blue("📊"), bold("LAB Status"))
 	fmt.Printf("%s\n", blue("═══════════════════"))
-	
+
 	// Check containers
 	containers := getContainers()
 	if len(containers) == 0 {
@@ -173,10 +173,10 @@ func showStatus() {
 		fmt.Printf("\nRun %s to start the lab\n", green("./lab start"))
 		return
 	}
-	
+
 	// Display container status
 	displayContainerTable(containers)
-	
+
 	// Show connection details
 	showConnectionDetails()
 }
@@ -184,20 +184,20 @@ func showStatus() {
 func getContainers() []Container {
 	cmd := exec.Command("docker", "ps", "--filter", "name=lab-", "--format", "{{.Names}}:{{.Status}}:{{.Ports}}")
 	output, err := cmd.Output()
-	
+
 	if err != nil {
 		return []Container{}
 	}
-	
+
 	lines := strings.Split(string(output), "\n")
 	containers := []Container{}
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue // Skip empty lines
 		}
-		
+
 		parts := strings.Split(line, ":")
 		if len(parts) >= 3 {
 			// Rejoin ports part (it may contain colons)
@@ -210,7 +210,7 @@ func getContainers() []Container {
 			containers = append(containers, container)
 		}
 	}
-	
+
 	return containers
 }
 
@@ -225,7 +225,7 @@ func displayContainerTable(containers []Container) {
 	table.SetHeader([]string{"Container", "Status", "SSH Port", "Hostname"})
 	table.SetBorder(true)
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	
+
 	for _, container := range containers {
 		status := container.Status
 		if strings.Contains(status, "Up") {
@@ -233,11 +233,11 @@ func displayContainerTable(containers []Container) {
 		} else {
 			status = red("Stopped")
 		}
-		
+
 		// Extract SSH port
 		sshPort := extractSSHPort(container.Ports)
 		hostname := extractHostname(container.Name)
-		
+
 		table.Append([]string{
 			container.Name,
 			status,
@@ -245,7 +245,7 @@ func displayContainerTable(containers []Container) {
 			hostname,
 		})
 	}
-	
+
 	table.Render()
 }
 
@@ -271,19 +271,19 @@ func extractHostname(containerName string) string {
 func showConnectionDetails() {
 	fmt.Printf("\n%s %s\n", cyan("🔗"), bold("Connection Details"))
 	fmt.Printf("%s\n", blue("═══════════════════════"))
-	
+
 	containers := getContainers()
 	if len(containers) == 0 {
 		return
 	}
-	
+
 	fmt.Printf("\n%s\n", bold("SSH Connections:"))
-	
+
 	for _, container := range containers {
 		if strings.Contains(container.Status, "Up") {
 			sshPort := extractSSHPort(container.Ports)
 			hostname := extractHostname(container.Name)
-			
+
 			if sshPort != "N/A" {
 				fmt.Printf("  %s %s:\n", green("→"), bold(hostname))
 				fmt.Printf("    %s ssh labuser@localhost -p %s\n", cyan("$"), sshPort)
@@ -292,7 +292,7 @@ func showConnectionDetails() {
 			}
 		}
 	}
-	
+
 	fmt.Printf("%s\n", bold("Environment Variables:"))
 	fmt.Printf("  %s ROOT_PASSWORD: %s\n", blue("•"), yellow("labroot123"))
 	fmt.Printf("  %s USER: %s\n", blue("•"), yellow("labuser"))
@@ -304,7 +304,7 @@ func showConnectionDetails() {
 func generateInventory() {
 	fmt.Printf("\n%s %s\n", cyan("📋"), bold("Generating Ansible Inventory"))
 	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
-	
+
 	// Check if containers are running
 	containers := getContainers()
 	if len(containers) == 0 {
@@ -312,17 +312,17 @@ func generateInventory() {
 		fmt.Printf("Run %s to start the lab first\n", green("./lab start"))
 		return
 	}
-	
+
 	// Generate dynamic inventory based on running containers
 	inventoryContent := generateInventoryContent(containers)
-	
+
 	// Write to file
 	err := os.WriteFile("inventory.yml", []byte(inventoryContent), 0644)
 	if err != nil {
 		fmt.Printf("%s Failed to write inventory file: %v\n", red("❌"), err)
 		return
 	}
-	
+
 	fmt.Printf("%s Ansible inventory generated: %s\n", green("✅"), bold("inventory.yml"))
 	fmt.Printf("\n%s\n", bold("Usage with Ansible:"))
 	fmt.Printf("  %s ansible -i inventory.yml lab_nodes -m ping\n", cyan("$"))
@@ -343,13 +343,13 @@ all:
         lab_nodes:
           hosts:
 `
-	
+
 	// Add each running container to inventory
 	for _, container := range containers {
 		if strings.Contains(container.Status, "Up") {
 			sshPort := extractSSHPort(container.Ports)
 			hostname := extractHostname(container.Name)
-			
+
 			if sshPort != "N/A" {
 				content += fmt.Sprintf(`            %s:
               ansible_host: localhost
@@ -365,7 +365,7 @@ all:
 			}
 		}
 	}
-	
+
 	content += `          vars:
             # Common variables for all lab nodes
             ansible_python_interpreter: /usr/bin/python3
@@ -383,14 +383,14 @@ all:
         ansible_distribution: Ubuntu
         ansible_distribution_version: "22.04"
 `
-	
+
 	return content
 }
 
 func testConnectivity() {
 	fmt.Printf("\n%s %s\n", blue("🧪"), bold("Testing LAB Connectivity"))
 	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
-	
+
 	// Check if containers are running
 	containers := getContainers()
 	if len(containers) == 0 {
@@ -398,45 +398,45 @@ func testConnectivity() {
 		fmt.Printf("Run %s to start the lab first\n", green("./lab start"))
 		return
 	}
-	
+
 	fmt.Printf("\n%s\n", bold("SSH Connectivity Tests:"))
-	
+
 	allPassed := true
 	for _, container := range containers {
 		if strings.Contains(container.Status, "Up") {
 			sshPort := extractSSHPort(container.Ports)
 			hostname := extractHostname(container.Name)
-			
+
 			if sshPort != "N/A" {
 				fmt.Printf("  %s Testing %s (port %s)... ", blue("→"), bold(hostname), sshPort)
-				
+
 				// Test SSH connection with cross-platform timeout
 				var cmd *exec.Cmd
-				
+
 				// Try different timeout commands based on platform
 				if _, err := exec.LookPath("timeout"); err == nil {
 					// Linux timeout command
-					cmd = exec.Command("timeout", "10", "sshpass", "-p", "labpass123", "ssh", 
-						"-o", "StrictHostKeyChecking=no", 
+					cmd = exec.Command("timeout", "10", "sshpass", "-p", "labpass123", "ssh",
+						"-o", "StrictHostKeyChecking=no",
 						"-o", "UserKnownHostsFile=/dev/null",
 						"-o", "ConnectTimeout=5",
 						"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
 				} else if _, err := exec.LookPath("gtimeout"); err == nil {
 					// macOS gtimeout command (from coreutils)
-					cmd = exec.Command("gtimeout", "10", "sshpass", "-p", "labpass123", "ssh", 
-						"-o", "StrictHostKeyChecking=no", 
+					cmd = exec.Command("gtimeout", "10", "sshpass", "-p", "labpass123", "ssh",
+						"-o", "StrictHostKeyChecking=no",
 						"-o", "UserKnownHostsFile=/dev/null",
 						"-o", "ConnectTimeout=5",
 						"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
 				} else {
 					// Fallback without external timeout (relies on SSH ConnectTimeout)
-					cmd = exec.Command("sshpass", "-p", "labpass123", "ssh", 
-						"-o", "StrictHostKeyChecking=no", 
+					cmd = exec.Command("sshpass", "-p", "labpass123", "ssh",
+						"-o", "StrictHostKeyChecking=no",
 						"-o", "UserKnownHostsFile=/dev/null",
 						"-o", "ConnectTimeout=5",
 						"-p", sshPort, "labuser@localhost", "echo 'SSH_OK'")
 				}
-				
+
 				output, err := cmd.Output()
 				if err != nil || !strings.Contains(string(output), "SSH_OK") {
 					fmt.Printf("%s\n", red("FAILED"))
@@ -447,10 +447,10 @@ func testConnectivity() {
 			}
 		}
 	}
-	
+
 	// Test Ansible if available
 	fmt.Printf("\n%s\n", bold("Ansible Connectivity Tests:"))
-	
+
 	// Check if ansible is installed
 	_, err := exec.LookPath("ansible")
 	if err != nil {
@@ -464,10 +464,10 @@ func testConnectivity() {
 			fmt.Printf("  %s Failed to create test inventory\n", red("❌"))
 		} else {
 			fmt.Printf("  %s Testing Ansible ping... ", blue("→"))
-			
+
 			cmd := exec.Command("ansible", "-i", "inventory-test.yml", "lab_nodes", "-m", "ping")
 			output, err := cmd.CombinedOutput()
-			
+
 			if err != nil {
 				fmt.Printf("%s\n", red("FAILED"))
 				fmt.Printf("    %s\n", string(output))
@@ -478,12 +478,12 @@ func testConnectivity() {
 				fmt.Printf("%s\n", yellow("PARTIAL"))
 				allPassed = false
 			}
-			
+
 			// Clean up test inventory
 			os.Remove("inventory-test.yml")
 		}
 	}
-	
+
 	fmt.Printf("\n%s\n", bold("Test Summary:"))
 	if allPassed {
 		fmt.Printf("  %s All connectivity tests passed!\n", green("✅"))
@@ -501,7 +501,7 @@ services:`
 	for i := 1; i <= containerCount; i++ {
 		containerNum := fmt.Sprintf("%02d", i)
 		sshPort := 2221 + i
-		
+
 		content += fmt.Sprintf(`
   lab-%s:
     build: .

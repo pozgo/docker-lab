@@ -1,0 +1,257 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Run tests
+      run: make test
+
+    - name: Test build
+      run: make build
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Release version: ${VERSION}"
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Build all platforms
+      run: |
+        echo "Building binaries..."
+        cd app
+        
+        # Verify we're in the right directory
+        pwd
+        ls -la
+        
+        # Build for Linux AMD64
+        echo "Building Linux AMD64..."
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../lab-linux-amd64 .
+        
+        # Build for Linux ARM64
+        echo "Building Linux ARM64..."
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ../lab-linux-arm64 .
+        
+        # Build for macOS AMD64
+        echo "Building macOS AMD64..."
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ../lab-darwin-amd64 .
+        
+        # Build for macOS ARM64
+        echo "Building macOS ARM64..."
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ../lab-darwin-arm64 .
+        
+        # Verify builds
+        cd ..
+        echo "Built binaries:"
+        ls -la lab-*
+
+    - name: Generate checksums
+      run: |
+        echo "Generating checksums..."
+        for binary in lab-linux-* lab-darwin-*; do
+          if [ -f "$binary" ]; then
+            echo "Generating checksum for $binary"
+            sha256sum "$binary" > "${binary}.sha256"
+          fi
+        done
+        
+        echo "Generated checksums:"
+        ls -la *.sha256
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -2 | tail -1)
+        if [ -z "$PREVIOUS_TAG" ]; then
+          PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+        fi
+        
+        CHANGELOG=$(cat << 'EOF'
+        ## 🚀 LAB ${{ steps.version.outputs.version }}
+        
+        **Release Date:** $(date -u +"%Y-%m-%d")
+        **Full Changelog:** https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ steps.version.outputs.version }}
+        
+        ### 📥 Installation
+        
+        **Quick Install (Linux/macOS):**
+        ```bash
+        # Linux AMD64
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64
+        chmod +x lab-linux-amd64 && mv lab-linux-amd64 lab
+        
+        # Linux ARM64
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64
+        chmod +x lab-linux-arm64 && mv lab-linux-arm64 lab
+        
+        # macOS Intel
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64
+        chmod +x lab-darwin-amd64 && mv lab-darwin-amd64 lab
+        
+        # macOS Apple Silicon (M1/M2)
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64
+        chmod +x lab-darwin-arm64 && mv lab-darwin-arm64 lab
+        ```
+        
+        ### 🏗️ Available Binaries
+        
+        | Platform | Architecture | Binary | Checksum |
+        |----------|-------------|--------|----------|
+        | Linux | AMD64 | [lab-linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64.sha256) |
+        | Linux | ARM64 | [lab-linux-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64.sha256) |
+        | macOS | Intel | [lab-darwin-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64.sha256) |
+        | macOS | Apple Silicon | [lab-darwin-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64.sha256) |
+        
+        ### 🔍 Verification
+        
+        **Verify SHA256 checksums:**
+        ```bash
+        # Download checksum file
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64.sha256
+        
+        # Verify (Linux/macOS)
+        sha256sum -c lab-linux-amd64.sha256
+        ```
+        
+        ### 🚀 Quick Start
+        
+        ```bash
+        # Start lab environment
+        ./lab start
+        
+        # Start with custom number of containers
+        ./lab start --containers 5
+        
+        # Check status
+        ./lab status
+        
+        # Generate Ansible inventory
+        ./lab inventory
+        
+        # Test connectivity
+        ./lab test
+        ```
+        
+        ### 📋 Changes
+        
+        EOF
+        )
+        
+        # Add git log for changes
+        COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --oneline --no-merges | head -20)
+        if [ ! -z "$COMMITS" ]; then
+          CHANGELOG="${CHANGELOG}
+        **Recent Changes:**
+        \`\`\`
+        $COMMITS
+        \`\`\`"
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Check if release exists
+      id: check_release
+      continue-on-error: true
+      run: |
+        if gh release view ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+          echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "Release ${{ steps.version.outputs.version }} already exists"
+        else
+          echo "release_exists=false" >> $GITHUB_OUTPUT
+          echo "Release ${{ steps.version.outputs.version }} does not exist"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create or update release
+      run: |
+        # List available files for debugging
+        echo "Available files:"
+        ls -la lab-* *.sha256 || true
+        
+        if [ "${{ steps.check_release.outputs.release_exists }}" = "true" ]; then
+          echo "Updating existing release"
+          gh release upload ${{ steps.version.outputs.version }} \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256 --clobber
+        else
+          echo "Creating new release"
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "🧪 LAB ${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.changelog.outputs.changelog }}" \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-main:
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Merge tag to main
+      run: |
+        git checkout main
+        git merge ${{ github.ref_name }} --no-ff -m "Merge tag '${{ github.ref_name }}' into main"
+        git push origin main

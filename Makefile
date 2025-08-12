@@ -59,7 +59,7 @@ deps:
 # Test the application
 test:
 	@echo "🧪 Running tests..."
-	cd $(SOURCE_DIR) && go test -v ./...
+	cd $(SOURCE_DIR) && go test -v .
 
 # Clean build artifacts
 clean:

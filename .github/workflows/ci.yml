@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "dev", "main" ]
+
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Run tests
+      run: make test
+
+    - name: Test build
+      run: make build
+
+  build-and-prerelease:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Generate development version
+      id: version
+      run: |
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        DEV_VERSION="dev-${TIMESTAMP}-${SHORT_SHA}"
+        echo "version=${DEV_VERSION}" >> $GITHUB_OUTPUT
+        echo "Development version: ${DEV_VERSION}"
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Build all platforms
+      run: |
+        cd app
+        # Build for Linux AMD64
+        GOOS=linux GOARCH=amd64 go build -o ../lab-linux-amd64 .
+        # Build for Linux ARM64
+        GOOS=linux GOARCH=arm64 go build -o ../lab-linux-arm64 .
+        # Build for macOS AMD64
+        GOOS=darwin GOARCH=amd64 go build -o ../lab-darwin-amd64 .
+        # Build for macOS ARM64
+        GOOS=darwin GOARCH=arm64 go build -o ../lab-darwin-arm64 .
+
+    - name: Generate checksums
+      run: |
+        for binary in lab-linux-* lab-darwin-*; do
+          if [ -f "$binary" ]; then
+            sha256sum "$binary" > "${binary}.sha256"
+          fi
+        done
+
+    - name: Generate development changelog
+      id: changelog
+      run: |
+        CHANGELOG=$(cat << 'EOF'
+        ## 🚧 Development Build
+        
+        **Version:** ${{ steps.version.outputs.version }}
+        **Commit:** ${{ github.sha }}
+        **Branch:** ${{ github.ref_name }}
+        **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        ### ⚠️ Notice
+        This is a development build and may contain experimental features or bugs.
+        Use at your own risk in production environments.
+        
+        ### 📥 Installation
+        
+        **Linux AMD64:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64
+        chmod +x lab-linux-amd64
+        mv lab-linux-amd64 lab
+        ```
+        
+        **Linux ARM64:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64
+        chmod +x lab-linux-arm64
+        mv lab-linux-arm64 lab
+        ```
+        
+        **macOS Intel:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64
+        chmod +x lab-darwin-amd64
+        mv lab-darwin-amd64 lab
+        ```
+        
+        **macOS Apple Silicon:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64
+        chmod +x lab-darwin-arm64
+        mv lab-darwin-arm64 lab
+        ```
+        
+        ### 🔍 Verification
+        Verify your download with the provided SHA256 checksums.
+        
+        ### 📋 Changes in this build
+        - Latest development changes
+        - See commit history for detailed changes
+        EOF
+        )
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Check if dev release exists
+      id: check_dev_release
+      continue-on-error: true
+      run: |
+        if gh release view ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+          echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "Development release ${{ steps.version.outputs.version }} already exists"
+        else
+          echo "release_exists=false" >> $GITHUB_OUTPUT
+          echo "Development release ${{ steps.version.outputs.version }} does not exist"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create or update development release
+      run: |
+        # List available files for debugging
+        echo "Available files:"
+        ls -la lab-* *.sha256 || true
+        
+        if [ "${{ steps.check_dev_release.outputs.release_exists }}" = "true" ]; then
+          echo "Updating existing development release"
+          gh release upload ${{ steps.version.outputs.version }} \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256 --clobber
+        else
+          echo "Creating new development release"
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "🚧 Development Build ${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.changelog.outputs.changelog }}" \
+            --prerelease \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
