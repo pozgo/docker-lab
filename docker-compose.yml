@@ -23,14 +23,14 @@ services:
     container_name: lab-02
     hostname: lab-02
     ports:
-      - "2223:22"  # Different SSH port
+      - "2223:22"  # SSH port mapping
     environment:
       - ROOT_PASSWORD=labroot123
       - USER=labuser
       - USER_PASSWORD=labpass123
       - SUDO=true
     volumes:
-      - lab-02-home:/home
+      - lab-02-home:/home  # Persistent user home directories
       - lab-02-services:/etc/systemd/system  # Persistent systemd services
     networks:
       - lab-network
@@ -39,10 +39,10 @@ services:
 volumes:
   lab-01-home:
     name: lab-01-home
-  lab-02-home:
-    name: lab-02-home
   lab-01-services:
     name: lab-01-services
+  lab-02-home:
+    name: lab-02-home
   lab-02-services:
     name: lab-02-services
 
