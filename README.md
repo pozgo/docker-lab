@@ -56,15 +56,20 @@
 ### Basic Usage
 
 ```bash
-# Start the lab environment
+# Start the lab environment (default: 2 containers)
 ./lab start
+
+# Start with custom number of containers
+./lab start --containers 5
+./lab start -c 3
 
 # Check status and connection details
 ./lab status
 
-# Connect via SSH
+# Connect via SSH (ports start from 2222)
 ssh labuser@localhost -p 2222  # lab-01
 ssh labuser@localhost -p 2223  # lab-02
+ssh labuser@localhost -p 2224  # lab-03 (if created)
 
 # Stop the lab
 ./lab stop
@@ -79,7 +84,7 @@ ssh labuser@localhost -p 2223  # lab-02
 
 | Command | Description |
 |---------|-------------|
-| `start` | Start the lab environment |
+| `start [--containers N]` | Start the lab environment with N containers (default: 2) |
 | `stop` | Stop the lab environment |
 | `clean` | Clean up lab containers and images |
 | `status` | Show lab status and connection details |
@@ -249,7 +254,6 @@ LAB/
 ├── entrypoint.sh          # Container startup script
 ├── inventory.yml          # Ansible inventory
 ├── Makefile              # Build automation
-├── lab*                   # Compiled binaries
 └── README.md             # This file
 ```
 

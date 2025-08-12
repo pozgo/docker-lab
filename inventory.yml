@@ -9,16 +9,6 @@ all:
       children:
         lab_nodes:
           hosts:
-            lab-01:
-              ansible_host: localhost
-              ansible_port: 2222
-              ansible_user: labuser
-              ansible_ssh_pass: labpass123
-              ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
-              container_name: lab-01
-              hostname: lab-01
-              ssh_port: 2222
-              
             lab-02:
               ansible_host: localhost
               ansible_port: 2223
@@ -28,6 +18,16 @@ all:
               container_name: lab-02
               hostname: lab-02
               ssh_port: 2223
+              
+            lab-01:
+              ansible_host: localhost
+              ansible_port: 2222
+              ansible_user: labuser
+              ansible_ssh_pass: labpass123
+              ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+              container_name: lab-01
+              hostname: lab-01
+              ssh_port: 2222
               
           vars:
             # Common variables for all lab nodes

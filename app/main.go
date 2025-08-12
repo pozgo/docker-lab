@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,9 +32,18 @@ func main() {
 	
 	command := os.Args[1]
 	
+	// Parse flags for commands that support them
+	var containerCount int
+	if command == "start" {
+		flagSet := flag.NewFlagSet("start", flag.ExitOnError)
+		flagSet.IntVar(&containerCount, "containers", 2, "Number of containers to create (default: 2)")
+		flagSet.IntVar(&containerCount, "c", 2, "Number of containers to create (short flag)")
+		flagSet.Parse(os.Args[2:])
+	}
+	
 	switch command {
 	case "start":
-		startLab()
+		startLab(containerCount)
 	case "stop":
 		stopLab()
 	case "clean":
@@ -56,24 +66,36 @@ func printHeader() {
 }
 
 func printUsage() {
-	fmt.Printf("\n%s\n", bold("Usage: ./lab <command>"))
+	fmt.Printf("\n%s\n", bold("Usage: ./lab <command> [options]"))
 	fmt.Printf("\n%s\n", bold("Commands:"))
 	fmt.Printf("  %s     - Start the lab environment\n", green("start"))
+	fmt.Printf("    %s --containers N, -c N  - Number of containers (default: 2)\n", blue("Options:"))
 	fmt.Printf("  %s      - Stop the lab environment\n", yellow("stop"))
 	fmt.Printf("  %s     - Clean up lab containers and images\n", red("clean"))
 	fmt.Printf("  %s    - Show lab status and connection details\n", blue("status"))
 	fmt.Printf("  %s - Generate Ansible inventory file\n", cyan("inventory"))
 	fmt.Printf("  %s      - Test SSH and Ansible connectivity\n", blue("test"))
+	fmt.Printf("\n%s\n", bold("Examples:"))
+	fmt.Printf("  ./lab start                    # Start with 2 containers\n")
+	fmt.Printf("  ./lab start --containers 5     # Start with 5 containers\n")
+	fmt.Printf("  ./lab start -c 3               # Start with 3 containers\n")
 	fmt.Println()
 }
 
-func startLab() {
+func startLab(containerCount int) {
 	fmt.Printf("\n%s %s\n", green("🚀"), bold("Starting LAB environment..."))
 	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
 	
-	// Check if docker-compose.yml exists
-	if _, err := os.Stat("docker-compose.yml"); os.IsNotExist(err) {
-		fmt.Printf("%s docker-compose.yml not found in current directory\n", red("❌"))
+	if containerCount <= 0 {
+		containerCount = 2
+	}
+	
+	fmt.Printf("%s Creating %d containers...\n", cyan("📊"), containerCount)
+	
+	// Generate dynamic docker-compose.yml
+	err := generateDockerCompose(containerCount)
+	if err != nil {
+		fmt.Printf("%s Failed to generate docker-compose.yml: %v\n", red("❌"), err)
 		return
 	}
 	
@@ -237,10 +259,11 @@ func extractSSHPort(ports string) string {
 }
 
 func extractHostname(containerName string) string {
-	if strings.Contains(containerName, "lab-01") {
-		return "lab-01"
-	} else if strings.Contains(containerName, "lab-02") {
-		return "lab-02"
+	// Extract lab-XX from container name
+	re := regexp.MustCompile(`lab-(\d+)`)
+	matches := re.FindStringSubmatch(containerName)
+	if len(matches) > 1 {
+		return "lab-" + matches[1]
 	}
 	return "unknown"
 }
@@ -468,4 +491,62 @@ func testConnectivity() {
 		fmt.Printf("  %s Some tests failed - check SSH configuration\n", red("❌"))
 	}
 	fmt.Println()
+}
+
+func generateDockerCompose(containerCount int) error {
+	content := `
+services:`
+
+	// Generate services for each container
+	for i := 1; i <= containerCount; i++ {
+		containerNum := fmt.Sprintf("%02d", i)
+		sshPort := 2221 + i
+		
+		content += fmt.Sprintf(`
+  lab-%s:
+    build: .
+    container_name: lab-%s
+    hostname: lab-%s
+    ports:
+      - "%d:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-%s-home:/home  # Persistent user home directories
+      - lab-%s-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+`, containerNum, containerNum, containerNum, sshPort, containerNum, containerNum)
+	}
+
+	// Generate volumes section
+	content += `
+volumes:`
+	for i := 1; i <= containerCount; i++ {
+		containerNum := fmt.Sprintf("%02d", i)
+		content += fmt.Sprintf(`
+  lab-%s-home:
+    name: lab-%s-home
+  lab-%s-services:
+    name: lab-%s-services`, containerNum, containerNum, containerNum, containerNum)
+	}
+
+	// Add networks section
+	content += `
+
+networks:
+  lab-network:
+    name: lab-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+`
+
+	// Write to file
+	return os.WriteFile("docker-compose.yml", []byte(content), 0644)
 }
