@@ -59,12 +59,20 @@ jobs:
       run: make deps
 
     - name: Build all platforms
-      run: make build-all
+      run: |
+        cd app
+        # Build for Linux AMD64
+        GOOS=linux GOARCH=amd64 go build -o ../lab-linux-amd64 .
+        # Build for Linux ARM64
+        GOOS=linux GOARCH=arm64 go build -o ../lab-linux-arm64 .
+        # Build for macOS AMD64
+        GOOS=darwin GOARCH=amd64 go build -o ../lab-darwin-amd64 .
+        # Build for macOS ARM64
+        GOOS=darwin GOARCH=arm64 go build -o ../lab-darwin-arm64 .
 
     - name: Generate checksums
       run: |
-        cd .
-        for binary in lab-*; do
+        for binary in lab-linux-* lab-darwin-*; do
           if [ -f "$binary" ]; then
             sha256sum "$binary" > "${binary}.sha256"
           fi
@@ -166,8 +174,17 @@ jobs:
     - name: Delete existing release and tag
       continue-on-error: true
       run: |
-        gh release delete ${{ steps.version.outputs.version }} --yes || true
-        git push origin --delete ${{ steps.version.outputs.version }} || true
+        # Delete existing release if it exists
+        if gh release view ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+          echo "Deleting existing release ${{ steps.version.outputs.version }}"
+          gh release delete ${{ steps.version.outputs.version }} --yes
+        fi
+        
+        # Delete existing tag if it exists
+        if git ls-remote --exit-code origin refs/tags/${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+          echo "Deleting existing tag ${{ steps.version.outputs.version }}"
+          git push origin --delete ${{ steps.version.outputs.version }}
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -176,7 +193,8 @@ jobs:
         gh release create ${{ steps.version.outputs.version }} \
           --title "🧪 LAB ${{ steps.version.outputs.version }}" \
           --notes "${{ steps.changelog.outputs.changelog }}" \
-          lab-* \
+          lab-linux-* \
+          lab-darwin-* \
           *.sha256
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

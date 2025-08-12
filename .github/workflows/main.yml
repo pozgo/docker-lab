@@ -31,7 +31,13 @@ jobs:
       run: make build
 
     - name: Test cross-platform builds
-      run: make build-all
+      run: |
+        cd app
+        # Test building for all platforms
+        GOOS=linux GOARCH=amd64 go build -o ../lab-linux-amd64 .
+        GOOS=linux GOARCH=arm64 go build -o ../lab-linux-arm64 .
+        GOOS=darwin GOARCH=amd64 go build -o ../lab-darwin-amd64 .
+        GOOS=darwin GOARCH=arm64 go build -o ../lab-darwin-arm64 .
 
   lint:
     runs-on: ubuntu-latest

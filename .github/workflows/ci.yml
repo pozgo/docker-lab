@@ -51,12 +51,20 @@ jobs:
       run: make deps
 
     - name: Build all platforms
-      run: make build-all
+      run: |
+        cd app
+        # Build for Linux AMD64
+        GOOS=linux GOARCH=amd64 go build -o ../lab-linux-amd64 .
+        # Build for Linux ARM64
+        GOOS=linux GOARCH=arm64 go build -o ../lab-linux-arm64 .
+        # Build for macOS AMD64
+        GOOS=darwin GOARCH=amd64 go build -o ../lab-darwin-amd64 .
+        # Build for macOS ARM64
+        GOOS=darwin GOARCH=arm64 go build -o ../lab-darwin-arm64 .
 
     - name: Generate checksums
       run: |
-        cd .
-        for binary in lab-*; do
+        for binary in lab-linux-* lab-darwin-*; do
           if [ -f "$binary" ]; then
             sha256sum "$binary" > "${binary}.sha256"
           fi
@@ -133,7 +141,8 @@ jobs:
           --title "🚧 Development Build ${{ steps.version.outputs.version }}" \
           --notes "${{ steps.changelog.outputs.changelog }}" \
           --prerelease \
-          lab-* \
+          lab-linux-* \
+          lab-darwin-* \
           *.sha256
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
