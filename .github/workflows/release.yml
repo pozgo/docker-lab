@@ -60,23 +60,46 @@ jobs:
 
     - name: Build all platforms
       run: |
+        echo "Building binaries..."
         cd app
+        
+        # Verify we're in the right directory
+        pwd
+        ls -la
+        
         # Build for Linux AMD64
-        GOOS=linux GOARCH=amd64 go build -o ../lab-linux-amd64 .
+        echo "Building Linux AMD64..."
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../lab-linux-amd64 .
+        
         # Build for Linux ARM64
-        GOOS=linux GOARCH=arm64 go build -o ../lab-linux-arm64 .
+        echo "Building Linux ARM64..."
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ../lab-linux-arm64 .
+        
         # Build for macOS AMD64
-        GOOS=darwin GOARCH=amd64 go build -o ../lab-darwin-amd64 .
+        echo "Building macOS AMD64..."
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ../lab-darwin-amd64 .
+        
         # Build for macOS ARM64
-        GOOS=darwin GOARCH=arm64 go build -o ../lab-darwin-arm64 .
+        echo "Building macOS ARM64..."
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ../lab-darwin-arm64 .
+        
+        # Verify builds
+        cd ..
+        echo "Built binaries:"
+        ls -la lab-*
 
     - name: Generate checksums
       run: |
+        echo "Generating checksums..."
         for binary in lab-linux-* lab-darwin-*; do
           if [ -f "$binary" ]; then
+            echo "Generating checksum for $binary"
             sha256sum "$binary" > "${binary}.sha256"
           fi
         done
+        
+        echo "Generated checksums:"
+        ls -la *.sha256
 
     - name: Generate changelog
       id: changelog
@@ -171,31 +194,39 @@ jobs:
         echo "$CHANGELOG" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    - name: Delete existing release and tag
+    - name: Check if release exists
+      id: check_release
       continue-on-error: true
       run: |
-        # Delete existing release if it exists
         if gh release view ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
-          echo "Deleting existing release ${{ steps.version.outputs.version }}"
-          gh release delete ${{ steps.version.outputs.version }} --yes
-        fi
-        
-        # Delete existing tag if it exists
-        if git ls-remote --exit-code origin refs/tags/${{ steps.version.outputs.version }} >/dev/null 2>&1; then
-          echo "Deleting existing tag ${{ steps.version.outputs.version }}"
-          git push origin --delete ${{ steps.version.outputs.version }}
+          echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "Release ${{ steps.version.outputs.version }} already exists"
+        else
+          echo "release_exists=false" >> $GITHUB_OUTPUT
+          echo "Release ${{ steps.version.outputs.version }} does not exist"
         fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Create release
+    - name: Create or update release
       run: |
-        gh release create ${{ steps.version.outputs.version }} \
-          --title "🧪 LAB ${{ steps.version.outputs.version }}" \
-          --notes "${{ steps.changelog.outputs.changelog }}" \
-          lab-linux-* \
-          lab-darwin-* \
-          *.sha256
+        # List available files for debugging
+        echo "Available files:"
+        ls -la lab-* *.sha256 || true
+        
+        if [ "${{ steps.check_release.outputs.release_exists }}" = "true" ]; then
+          echo "Updating existing release"
+          gh release upload ${{ steps.version.outputs.version }} \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256 --clobber
+        else
+          echo "Creating new release"
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "🧪 LAB ${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.changelog.outputs.changelog }}" \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

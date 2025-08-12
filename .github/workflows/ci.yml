@@ -127,22 +127,39 @@ jobs:
         echo "$CHANGELOG" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    - name: Delete existing dev release and tag
+    - name: Check if dev release exists
+      id: check_dev_release
       continue-on-error: true
       run: |
-        gh release delete ${{ steps.version.outputs.version }} --yes || true
-        git push origin --delete ${{ steps.version.outputs.version }} || true
+        if gh release view ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+          echo "release_exists=true" >> $GITHUB_OUTPUT
+          echo "Development release ${{ steps.version.outputs.version }} already exists"
+        else
+          echo "release_exists=false" >> $GITHUB_OUTPUT
+          echo "Development release ${{ steps.version.outputs.version }} does not exist"
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Create development release
+    - name: Create or update development release
       run: |
-        gh release create ${{ steps.version.outputs.version }} \
-          --title "🚧 Development Build ${{ steps.version.outputs.version }}" \
-          --notes "${{ steps.changelog.outputs.changelog }}" \
-          --prerelease \
-          lab-linux-* \
-          lab-darwin-* \
-          *.sha256
+        # List available files for debugging
+        echo "Available files:"
+        ls -la lab-* *.sha256 || true
+        
+        if [ "${{ steps.check_dev_release.outputs.release_exists }}" = "true" ]; then
+          echo "Updating existing development release"
+          gh release upload ${{ steps.version.outputs.version }} \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256 --clobber
+        else
+          echo "Creating new development release"
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "🚧 Development Build ${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.changelog.outputs.changelog }}" \
+            --prerelease \
+            lab-linux-amd64 lab-linux-arm64 lab-darwin-amd64 lab-darwin-arm64 \
+            *.sha256
+        fi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
