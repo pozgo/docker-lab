@@ -1,0 +1,203 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Run tests
+      run: make test
+
+    - name: Test build
+      run: make build
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Release version: ${VERSION}"
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Build all platforms
+      run: make build-all
+
+    - name: Generate checksums
+      run: |
+        cd .
+        for binary in lab-*; do
+          if [ -f "$binary" ]; then
+            sha256sum "$binary" > "${binary}.sha256"
+          fi
+        done
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -2 | tail -1)
+        if [ -z "$PREVIOUS_TAG" ]; then
+          PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+        fi
+        
+        CHANGELOG=$(cat << 'EOF'
+        ## 🚀 LAB ${{ steps.version.outputs.version }}
+        
+        **Release Date:** $(date -u +"%Y-%m-%d")
+        **Full Changelog:** https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ steps.version.outputs.version }}
+        
+        ### 📥 Installation
+        
+        **Quick Install (Linux/macOS):**
+        ```bash
+        # Linux AMD64
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64
+        chmod +x lab-linux-amd64 && mv lab-linux-amd64 lab
+        
+        # Linux ARM64
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64
+        chmod +x lab-linux-arm64 && mv lab-linux-arm64 lab
+        
+        # macOS Intel
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64
+        chmod +x lab-darwin-amd64 && mv lab-darwin-amd64 lab
+        
+        # macOS Apple Silicon (M1/M2)
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64
+        chmod +x lab-darwin-arm64 && mv lab-darwin-arm64 lab
+        ```
+        
+        ### 🏗️ Available Binaries
+        
+        | Platform | Architecture | Binary | Checksum |
+        |----------|-------------|--------|----------|
+        | Linux | AMD64 | [lab-linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64.sha256) |
+        | Linux | ARM64 | [lab-linux-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64.sha256) |
+        | macOS | Intel | [lab-darwin-amd64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64.sha256) |
+        | macOS | Apple Silicon | [lab-darwin-arm64](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64) | [SHA256](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64.sha256) |
+        
+        ### 🔍 Verification
+        
+        **Verify SHA256 checksums:**
+        ```bash
+        # Download checksum file
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64.sha256
+        
+        # Verify (Linux/macOS)
+        sha256sum -c lab-linux-amd64.sha256
+        ```
+        
+        ### 🚀 Quick Start
+        
+        ```bash
+        # Start lab environment
+        ./lab start
+        
+        # Start with custom number of containers
+        ./lab start --containers 5
+        
+        # Check status
+        ./lab status
+        
+        # Generate Ansible inventory
+        ./lab inventory
+        
+        # Test connectivity
+        ./lab test
+        ```
+        
+        ### 📋 Changes
+        
+        EOF
+        )
+        
+        # Add git log for changes
+        COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --oneline --no-merges | head -20)
+        if [ ! -z "$COMMITS" ]; then
+          CHANGELOG="${CHANGELOG}
+        **Recent Changes:**
+        \`\`\`
+        $COMMITS
+        \`\`\`"
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Delete existing release and tag
+      continue-on-error: true
+      run: |
+        gh release delete ${{ steps.version.outputs.version }} --yes || true
+        git push origin --delete ${{ steps.version.outputs.version }} || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create release
+      run: |
+        gh release create ${{ steps.version.outputs.version }} \
+          --title "🧪 LAB ${{ steps.version.outputs.version }}" \
+          --notes "${{ steps.changelog.outputs.changelog }}" \
+          lab-* \
+          *.sha256
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-main:
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Merge tag to main
+      run: |
+        git checkout main
+        git merge ${{ github.ref_name }} --no-ff -m "Merge tag '${{ github.ref_name }}' into main"
+        git push origin main

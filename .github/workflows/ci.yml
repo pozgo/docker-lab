@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "dev", "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Run tests
+      run: make test
+
+    - name: Test build
+      run: make build
+
+  build-and-prerelease:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Generate development version
+      id: version
+      run: |
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        DEV_VERSION="dev-${TIMESTAMP}-${SHORT_SHA}"
+        echo "version=${DEV_VERSION}" >> $GITHUB_OUTPUT
+        echo "Development version: ${DEV_VERSION}"
+
+    - name: Download dependencies
+      run: make deps
+
+    - name: Build all platforms
+      run: make build-all
+
+    - name: Generate checksums
+      run: |
+        cd .
+        for binary in lab-*; do
+          if [ -f "$binary" ]; then
+            sha256sum "$binary" > "${binary}.sha256"
+          fi
+        done
+
+    - name: Generate development changelog
+      id: changelog
+      run: |
+        CHANGELOG=$(cat << 'EOF'
+        ## 🚧 Development Build
+        
+        **Version:** ${{ steps.version.outputs.version }}
+        **Commit:** ${{ github.sha }}
+        **Branch:** ${{ github.ref_name }}
+        **Build Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        ### ⚠️ Notice
+        This is a development build and may contain experimental features or bugs.
+        Use at your own risk in production environments.
+        
+        ### 📥 Installation
+        
+        **Linux AMD64:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-amd64
+        chmod +x lab-linux-amd64
+        mv lab-linux-amd64 lab
+        ```
+        
+        **Linux ARM64:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-linux-arm64
+        chmod +x lab-linux-arm64
+        mv lab-linux-arm64 lab
+        ```
+        
+        **macOS Intel:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-amd64
+        chmod +x lab-darwin-amd64
+        mv lab-darwin-amd64 lab
+        ```
+        
+        **macOS Apple Silicon:**
+        ```bash
+        wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/lab-darwin-arm64
+        chmod +x lab-darwin-arm64
+        mv lab-darwin-arm64 lab
+        ```
+        
+        ### 🔍 Verification
+        Verify your download with the provided SHA256 checksums.
+        
+        ### 📋 Changes in this build
+        - Latest development changes
+        - See commit history for detailed changes
+        EOF
+        )
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Delete existing dev release and tag
+      continue-on-error: true
+      run: |
+        gh release delete ${{ steps.version.outputs.version }} --yes || true
+        git push origin --delete ${{ steps.version.outputs.version }} || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create development release
+      run: |
+        gh release create ${{ steps.version.outputs.version }} \
+          --title "🚧 Development Build ${{ steps.version.outputs.version }}" \
+          --notes "${{ steps.changelog.outputs.changelog }}" \
+          --prerelease \
+          lab-* \
+          *.sha256
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

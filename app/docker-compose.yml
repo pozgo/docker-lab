@@ -1,0 +1,231 @@
+
+services:
+  lab-01:
+    build: .
+    container_name: lab-01
+    hostname: lab-01
+    ports:
+      - "2222:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-01-home:/home  # Persistent user home directories
+      - lab-01-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-02:
+    build: .
+    container_name: lab-02
+    hostname: lab-02
+    ports:
+      - "2223:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-02-home:/home  # Persistent user home directories
+      - lab-02-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-03:
+    build: .
+    container_name: lab-03
+    hostname: lab-03
+    ports:
+      - "2224:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-03-home:/home  # Persistent user home directories
+      - lab-03-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-04:
+    build: .
+    container_name: lab-04
+    hostname: lab-04
+    ports:
+      - "2225:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-04-home:/home  # Persistent user home directories
+      - lab-04-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-05:
+    build: .
+    container_name: lab-05
+    hostname: lab-05
+    ports:
+      - "2226:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-05-home:/home  # Persistent user home directories
+      - lab-05-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-06:
+    build: .
+    container_name: lab-06
+    hostname: lab-06
+    ports:
+      - "2227:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-06-home:/home  # Persistent user home directories
+      - lab-06-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-07:
+    build: .
+    container_name: lab-07
+    hostname: lab-07
+    ports:
+      - "2228:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-07-home:/home  # Persistent user home directories
+      - lab-07-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-08:
+    build: .
+    container_name: lab-08
+    hostname: lab-08
+    ports:
+      - "2229:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-08-home:/home  # Persistent user home directories
+      - lab-08-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-09:
+    build: .
+    container_name: lab-09
+    hostname: lab-09
+    ports:
+      - "2230:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-09-home:/home  # Persistent user home directories
+      - lab-09-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+  lab-10:
+    build: .
+    container_name: lab-10
+    hostname: lab-10
+    ports:
+      - "2231:22"  # SSH port mapping
+    environment:
+      - ROOT_PASSWORD=labroot123
+      - USER=labuser
+      - USER_PASSWORD=labpass123
+      - SUDO=true
+    volumes:
+      - lab-10-home:/home  # Persistent user home directories
+      - lab-10-services:/etc/systemd/system  # Persistent systemd services
+    networks:
+      - lab-network
+    restart: unless-stopped
+
+volumes:
+  lab-01-home:
+    name: lab-01-home
+  lab-01-services:
+    name: lab-01-services
+  lab-02-home:
+    name: lab-02-home
+  lab-02-services:
+    name: lab-02-services
+  lab-03-home:
+    name: lab-03-home
+  lab-03-services:
+    name: lab-03-services
+  lab-04-home:
+    name: lab-04-home
+  lab-04-services:
+    name: lab-04-services
+  lab-05-home:
+    name: lab-05-home
+  lab-05-services:
+    name: lab-05-services
+  lab-06-home:
+    name: lab-06-home
+  lab-06-services:
+    name: lab-06-services
+  lab-07-home:
+    name: lab-07-home
+  lab-07-services:
+    name: lab-07-services
+  lab-08-home:
+    name: lab-08-home
+  lab-08-services:
+    name: lab-08-services
+  lab-09-home:
+    name: lab-09-home
+  lab-09-services:
+    name: lab-09-services
+  lab-10-home:
+    name: lab-10-home
+  lab-10-services:
+    name: lab-10-services
+
+networks:
+  lab-network:
+    name: lab-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
