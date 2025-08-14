@@ -101,7 +101,7 @@ func initLab(containerCount int) {
 		fmt.Printf("Use %s to stop first, then %s to reinitialize\n", yellow("./lab stop"), green("./lab init"))
 		return
 	}
-	
+
 	// Check if docker-compose.yml exists and warn but allow override
 	if _, err := os.Stat("docker-compose.yml"); err == nil {
 		fmt.Printf("%s docker-compose.yml exists - will be overwritten\n", yellow("⚠️"))

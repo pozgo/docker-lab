@@ -164,11 +164,14 @@ jobs:
         ### 🚀 Quick Start
         
         ```bash
-        # Start lab environment
-        ./lab start
+        # Initialize lab environment
+        ./lab init
         
-        # Start with custom number of containers
-        ./lab start --containers 5
+        # Initialize with custom number of containers
+        ./lab init --containers 5
+        
+        # Start existing lab environment  
+        ./lab start
         
         # Check status
         ./lab status
