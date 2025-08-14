@@ -34,16 +34,18 @@ func main() {
 
 	// Parse flags for commands that support them
 	var containerCount int
-	if command == "start" {
-		flagSet := flag.NewFlagSet("start", flag.ExitOnError)
+	if command == "init" {
+		flagSet := flag.NewFlagSet("init", flag.ExitOnError)
 		flagSet.IntVar(&containerCount, "containers", 2, "Number of containers to create (default: 2)")
 		flagSet.IntVar(&containerCount, "c", 2, "Number of containers to create (short flag)")
 		flagSet.Parse(os.Args[2:])
 	}
 
 	switch command {
+	case "init":
+		initLab(containerCount)
 	case "start":
-		startLab(containerCount)
+		startLab()
 	case "stop":
 		stopLab()
 	case "clean":
@@ -68,26 +70,41 @@ func printHeader() {
 func printUsage() {
 	fmt.Printf("\n%s\n", bold("Usage: ./lab <command> [options]"))
 	fmt.Printf("\n%s\n", bold("Commands:"))
-	fmt.Printf("  %s     - Start the lab environment\n", green("start"))
+	fmt.Printf("  %s      - Initialize lab environment with custom settings\n", green("init"))
 	fmt.Printf("    %s --containers N, -c N  - Number of containers (default: 2)\n", blue("Options:"))
+	fmt.Printf("  %s     - Start existing lab environment\n", cyan("start"))
 	fmt.Printf("  %s      - Stop the lab environment\n", yellow("stop"))
 	fmt.Printf("  %s     - Clean up lab containers and images\n", red("clean"))
 	fmt.Printf("  %s    - Show lab status and connection details\n", blue("status"))
 	fmt.Printf("  %s - Generate Ansible inventory file\n", cyan("inventory"))
 	fmt.Printf("  %s      - Test SSH and Ansible connectivity\n", blue("test"))
 	fmt.Printf("\n%s\n", bold("Examples:"))
-	fmt.Printf("  ./lab start                    # Start with 2 containers\n")
-	fmt.Printf("  ./lab start --containers 5     # Start with 5 containers\n")
-	fmt.Printf("  ./lab start -c 3               # Start with 3 containers\n")
+	fmt.Printf("  ./lab init                     # Initialize with 2 containers\n")
+	fmt.Printf("  ./lab init --containers 5      # Initialize with 5 containers\n")
+	fmt.Printf("  ./lab init -c 3                # Initialize with 3 containers\n")
+	fmt.Printf("  ./lab start                    # Start existing lab environment\n")
 	fmt.Println()
 }
 
-func startLab(containerCount int) {
-	fmt.Printf("\n%s %s\n", green("🚀"), bold("Starting LAB environment..."))
-	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
+func initLab(containerCount int) {
+	fmt.Printf("\n%s %s\n", green("🚀"), bold("Initializing LAB environment..."))
+	fmt.Printf("%s\n", blue("═════════════════════════════════════"))
 
 	if containerCount <= 0 {
 		containerCount = 2
+	}
+
+	// Check if containers are already running
+	containers := getContainers()
+	if len(containers) > 0 {
+		fmt.Printf("%s Lab containers are already running\n", yellow("⚠️"))
+		fmt.Printf("Use %s to stop first, then %s to reinitialize\n", yellow("./lab stop"), green("./lab init"))
+		return
+	}
+	
+	// Check if docker-compose.yml exists and warn but allow override
+	if _, err := os.Stat("docker-compose.yml"); err == nil {
+		fmt.Printf("%s docker-compose.yml exists - will be overwritten\n", yellow("⚠️"))
 	}
 
 	fmt.Printf("%s Creating %d containers...\n", cyan("📊"), containerCount)
@@ -101,6 +118,37 @@ func startLab(containerCount int) {
 
 	// Start the lab
 	fmt.Printf("%s Building and starting containers...\n", cyan("📦"))
+	cmd := exec.Command("docker", "compose", "up", "-d")
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		fmt.Printf("%s Failed to start lab: %v\n", red("❌"), err)
+		fmt.Printf("Output: %s\n", string(output))
+		return
+	}
+
+	fmt.Printf("%s Lab initialized and started successfully!\n", green("✅"))
+
+	// Wait a moment for containers to initialize
+	time.Sleep(2 * time.Second)
+
+	// Show connection details
+	showConnectionDetails()
+}
+
+func startLab() {
+	fmt.Printf("\n%s %s\n", green("🚀"), bold("Starting LAB environment..."))
+	fmt.Printf("%s\n", blue("═══════════════════════════════════"))
+
+	// Check if docker-compose.yml exists
+	if _, err := os.Stat("docker-compose.yml"); os.IsNotExist(err) {
+		fmt.Printf("%s No docker-compose.yml found\n", red("❌"))
+		fmt.Printf("Run %s first to initialize the lab environment\n", green("./lab init"))
+		return
+	}
+
+	// Start the lab using existing docker-compose.yml
+	fmt.Printf("%s Starting containers...\n", cyan("📦"))
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	output, err := cmd.CombinedOutput()
 
@@ -139,27 +187,48 @@ func cleanLab() {
 	fmt.Printf("\n%s %s\n", red("🧹"), bold("Cleaning LAB environment..."))
 	fmt.Printf("%s\n", blue("══════════════════════════════════"))
 
-	// Stop containers first
-	fmt.Printf("%s Stopping containers...\n", yellow("🛑"))
-	stopCmd := exec.Command("docker", "compose", "down")
+	// Stop containers and remove volumes
+	fmt.Printf("%s Stopping containers and removing volumes...\n", yellow("🛑"))
+	stopCmd := exec.Command("docker", "compose", "down", "-v", "--remove-orphans")
 	stopCmd.Run()
+
+	// Remove lab-specific volumes
+	fmt.Printf("%s Removing lab volumes...\n", red("💾"))
+	volumesCmd := exec.Command("docker", "volume", "ls", "-q", "--filter", "name=lab-")
+	volumeOutput, err := volumesCmd.Output()
+	if err == nil && len(strings.TrimSpace(string(volumeOutput))) > 0 {
+		volumes := strings.Split(strings.TrimSpace(string(volumeOutput)), "\n")
+		for _, volume := range volumes {
+			if strings.TrimSpace(volume) != "" {
+				removeVolCmd := exec.Command("docker", "volume", "rm", strings.TrimSpace(volume))
+				removeVolCmd.Run()
+			}
+		}
+	}
+
+	// Remove lab network
+	fmt.Printf("%s Removing lab network...\n", red("🌐"))
+	networkCmd := exec.Command("docker", "network", "rm", "lab-network")
+	networkCmd.Run()
 
 	// Remove lab images
 	fmt.Printf("%s Removing lab images...\n", red("🗑️"))
 	imagesCmd := exec.Command("docker", "images", "-q", "lab/image")
 	imageOutput, err := imagesCmd.Output()
-
 	if err == nil && len(strings.TrimSpace(string(imageOutput))) > 0 {
 		removeCmd := exec.Command("docker", "rmi", "lab/image:latest")
 		removeCmd.Run()
 	}
+
+	// Note: docker-compose.yml is preserved to maintain user customizations
 
 	// Clean up unused Docker resources
 	fmt.Printf("%s Cleaning unused Docker resources...\n", cyan("🧽"))
 	pruneCmd := exec.Command("docker", "system", "prune", "-f")
 	pruneCmd.Run()
 
-	fmt.Printf("%s Lab environment cleaned successfully!\n", green("✅"))
+	fmt.Printf("%s Lab environment cleaned completely!\n", green("✅"))
+	fmt.Printf("%s docker-compose.yml preserved - use %s to start again\n", cyan("💡"), green("./lab start"))
 }
 
 func showStatus() {
